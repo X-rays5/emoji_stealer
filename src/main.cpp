@@ -17,6 +17,7 @@ std::string GetGuildName(const std::string& guild_id) {
 
 struct Emoji {
   std::string id;
+  std::string name;
   bool animated;
 };
 
@@ -26,7 +27,7 @@ std::vector<Emoji> GetEmojis(const std::string& guild_id) {
 
     std::vector<Emoji> emojis;
     for (rapidjson::SizeType i = 0; i< json.Size(); i++) {
-      emojis.push_back({json[i]["id"].GetString(), json[i]["animated"].GetBool()});
+      emojis.push_back({json[i]["id"].GetString(), json[i]["name"].GetString(), json[i]["animated"].GetBool()});
     }
     return emojis;
   } else {
@@ -43,49 +44,53 @@ int main() {
 
   rapidjson::Document json;
   if (!json.Parse(bot::api::ApiGet("users/@me").text.c_str()).HasParseError()) {
-    std::cout << "Logged in as: " << json["username"].GetString() << '#' << json["discriminator"].GetString() << std::endl;
+    if (json.HasMember("username")) {
+      std::cout << "Logged in as: " << json["username"].GetString() << '#' << json["discriminator"].GetString() << std::endl;
 
-    std::cout << "Enter guild id: ";
-    std::string guild_id;
-    std::getline(std::cin, guild_id);
+      std::cout << "Enter guild id: ";
+      std::string guild_id;
+      std::getline(std::cin, guild_id);
 
-    std::cout << "Guild name: " << GetGuildName(guild_id) << std::endl;
+      std::cout << "Guild name: " << GetGuildName(guild_id) << std::endl;
 
-    if (!std::filesystem::is_directory(guild_id))
-      std::filesystem::create_directory(guild_id);
+      if (!std::filesystem::is_directory(guild_id))
+        std::filesystem::create_directory(guild_id);
 
-    std::vector<std::string> extensions = {"png", "jpg", "jpeg"};
-    std::uint32_t download_count = 0;
-    auto emojis = GetEmojis(guild_id);
-    for (auto&& emoji : emojis) {
-      if (emoji.animated) {
-        std::ofstream writer(fmt::format("{0}/{1}.gif", guild_id, emoji.id), std::ios::binary);
-        cpr::Response r = cpr::Download(writer, cpr::Url{fmt::format("https://cdn.discordapp.com/emojis/{0}.gif", emoji.id)});
-        writer.close();
-
-        if (r.status_code == 200) {
-          std::cout << "Downloaded emoji: " << emoji.id << std::endl;
-          download_count += 1;
-        } else {
-          std::cerr << "Failed to download: " << emoji.id << '\n' << "Status code: " << r.status_code << '\n' << r.text << std::endl;
-        }
-      } else {
-        for (auto&& extension : extensions) {
-          std::ofstream writer(fmt::format("{0}/{1}.{2}", guild_id, emoji.id, extension), std::ios::binary);
-          cpr::Response r = cpr::Download(writer, cpr::Url{fmt::format("https://cdn.discordapp.com/emojis/{0}.{1}", emoji.id, extension)});
+      std::vector<std::string> extensions = {"png", "jpg", "jpeg"};
+      std::uint32_t download_count = 0;
+      auto emojis = GetEmojis(guild_id);
+      for (auto&& emoji : emojis) {
+        if (emoji.animated) {
+          std::ofstream writer(fmt::format("{0}/{1}.gif", guild_id, emoji.name), std::ios::binary);
+          cpr::Response r = cpr::Download(writer, cpr::Url{fmt::format("https://cdn.discordapp.com/emojis/{0}.gif", emoji.id)});
           writer.close();
 
           if (r.status_code == 200) {
-            std::cout << "Downloaded emoji: " << emoji.id << std::endl;
+            std::cout << "Downloaded emoji: " << emoji.name << std::endl;
             download_count += 1;
-            break;
           } else {
-            std::cerr << "Failed to download: " << emoji.id << '\n' << "Status code: " << r.status_code << '\n' << r.text << std::endl;
+            std::cerr << "Failed to download: " << emoji.name << '\n' << "Status code: " << r.status_code << '\n' << r.text << std::endl;
+          }
+        } else {
+          for (auto&& extension : extensions) {
+            std::ofstream writer(fmt::format("{0}/{1}.{2}", guild_id, emoji.name, extension), std::ios::binary);
+            cpr::Response r = cpr::Download(writer, cpr::Url{fmt::format("https://cdn.discordapp.com/emojis/{0}.{1}", emoji.id, extension)});
+            writer.close();
+
+            if (r.status_code == 200) {
+              std::cout << "Downloaded emoji: " << emoji.name << std::endl;
+              download_count += 1;
+              break;
+            } else {
+              std::cerr << "Failed to download: " << emoji.name << '\n' << "Status code: " << r.status_code << '\n' << r.text << std::endl;
+            }
           }
         }
       }
+      std::cout << fmt::format("Downloaded {0} out of {1}", download_count, emojis.size()) << "\n";
+    } else {
+      std::cerr << "Error: " << "User doesn't exist" << std::endl;
     }
-    std::cout << fmt::format("Downloaded {0} out of {1}", download_count, emojis.size()) << "\n";
   } else {
     std::cerr << "Error: " << json.GetParseError() << std::endl;
   }
